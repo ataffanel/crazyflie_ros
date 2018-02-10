@@ -88,6 +88,7 @@ private:
             if (msg->buttons[Xbox360Buttons::Back] == 1 && lastButtonState[Xbox360Buttons::Back] == 0) {
                 land();
             }
+            #if 0
             if (msg->buttons[Xbox360Buttons::Yellow] == 1 && lastButtonState[Xbox360Buttons::Yellow] == 0) {
                 startTrajectory();
             }
@@ -100,6 +101,7 @@ private:
             if (msg->buttons[Xbox360Buttons::LB] == 1 && lastButtonState[Xbox360Buttons::LB] == 0) {
                 goHome();
             }
+            #endif
         }
 
         lastButtonState = msg->buttons;
@@ -117,7 +119,7 @@ private:
     {
         crazyflie_driver::Takeoff srv;
         srv.request.group = 0;
-        srv.request.height = 1.0;
+        srv.request.height = 0.5;
         srv.request.time_from_start = ros::Duration(2.0);
         m_serviceTakeoff.call(srv);
     }
@@ -126,7 +128,7 @@ private:
     {
         crazyflie_driver::Land srv;
         srv.request.group = 0;
-        srv.request.height = 0.06;
+        srv.request.height = 0.05;
         srv.request.time_from_start = ros::Duration(3.5);
         m_serviceLand.call(srv);
     }

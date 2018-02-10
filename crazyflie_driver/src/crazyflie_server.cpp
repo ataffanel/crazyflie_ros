@@ -167,6 +167,7 @@ public:
     bool enable_parameters,
     bool enable_logging,
     int id,
+    const std::string& type,
     const std::vector<crazyflie_driver::LogBlock>& log_blocks,
     ros::CallbackQueue& queue,
     bool force_no_cache)
@@ -177,6 +178,7 @@ public:
     , m_enableParameters(enable_parameters)
     , m_enableLogging(enable_logging)
     , m_id(id)
+    , m_type(type)
     , m_serviceUpdateParams()
     , m_serviceUploadTrajectory()
     , m_serviceSetEllipse()
@@ -227,6 +229,10 @@ public:
 
   const int id() const {
     return m_id;
+  }
+
+  const std::string& type() const {
+    return m_type;
   }
 
   void sendPing() {
@@ -568,6 +574,7 @@ private:
   bool m_enableParameters;
   bool m_enableLogging;
   int m_id;
+  std::string m_type;
 
   ros::ServiceServer m_serviceUpdateParams;
   ros::ServiceServer m_serviceUploadTrajectory;
@@ -945,6 +952,7 @@ private:
       std::string tf_prefix;
       std::string frame;
       int idNumber;
+      std::string type;
     };
     ros::NodeHandle nGlobal;
 
@@ -960,6 +968,7 @@ private:
       XmlRpc::XmlRpcValue crazyflie = crazyflies[i];
       int id = crazyflie["id"];
       int ch = crazyflie["channel"];
+      std::string type = crazyflie["type"];
       if (ch == channel) {
         XmlRpc::XmlRpcValue pos = crazyflie["initialPosition"];
         ROS_ASSERT(pos.getType() == XmlRpc::XmlRpcValue::TypeArray);
@@ -981,7 +990,7 @@ private:
         std::string uri = "radio://" + std::to_string(m_radio) + "/" + std::to_string(channel) + "/2M/E7E7E7E7" + idHex;
         std::string tf_prefix = "cf" + std::to_string(id);
         std::string frame = "cf" + std::to_string(id);
-        cfConfigs.push_back({uri, tf_prefix, frame, id});
+        cfConfigs.push_back({uri, tf_prefix, frame, id, type});
       }
     }
 
@@ -1005,7 +1014,7 @@ private:
 
     // add Crazyflies
     for (const auto& config : cfConfigs) {
-      addCrazyflie(config.uri, config.tf_prefix, config.frame, "/world", enableParameters, enableLogging, config.idNumber, logBlocks, forceNoCache);
+      addCrazyflie(config.uri, config.tf_prefix, config.frame, "/world", enableParameters, enableLogging, config.idNumber, config.type, logBlocks, forceNoCache);
 
       auto start = std::chrono::high_resolution_clock::now();
       updateParams(m_cfs.back());
@@ -1023,6 +1032,7 @@ private:
     bool enableParameters,
     bool enableLogging,
     int id,
+    const std::string& type,
     const std::vector<crazyflie_driver::LogBlock>& logBlocks,
     bool forceNoCache)
   {
@@ -1036,6 +1046,7 @@ private:
       enableParameters,
       enableLogging,
       id,
+      type,
       logBlocks,
       m_slowQueue,
       forceNoCache);
@@ -1055,8 +1066,11 @@ private:
     ros::NodeHandle n("~");
     ros::NodeHandle nGlobal;
     // update parameters
+    // std::cout << "attempt: " << "firmwareParams/" + cf->type() << std::endl;
+    // char dummy;
+    // std::cin >> dummy;
     XmlRpc::XmlRpcValue firmwareParams;
-    n.getParam("firmwareParams", firmwareParams);
+    n.getParam("firmwareParams/" + cf->type() + "/", firmwareParams);
 
     crazyflie_driver::UpdateParams::Request request;
     crazyflie_driver::UpdateParams::Response response;
@@ -1083,6 +1097,7 @@ private:
           ROS_WARN("No known type for %s.%s!", group.c_str(), param.c_str());
         }
         request.params.push_back(group + "/" + param);
+        // std::cout << "update " << group + "/" + param << " to " << (double)value << std::endl;
       }
     }
     cf->updateParams(request, response);
