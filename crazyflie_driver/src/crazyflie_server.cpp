@@ -981,7 +981,11 @@ private:
         }
         Eigen::Affine3f m;
         m = Eigen::Translation3f(posVec[0], posVec[1], posVec[2]);
-        objects.push_back(libobjecttracker::Object(0, 0, m));
+        int markerConfigurationIdx;
+        nGlobal.getParam("crazyflieTypes/" + type + "/markerConfiguration", markerConfigurationIdx);
+        int dynamicsConfigurationIdx;
+        nGlobal.getParam("crazyflieTypes/" + type + "/dynamicsConfiguration", dynamicsConfigurationIdx);
+        objects.push_back(libobjecttracker::Object(markerConfigurationIdx, dynamicsConfigurationIdx, m));
 
         std::stringstream sstr;
         sstr << std::setfill ('0') << std::setw(2) << std::hex << id;
@@ -1069,35 +1073,50 @@ private:
     // std::cout << "attempt: " << "firmwareParams/" + cf->type() << std::endl;
     // char dummy;
     // std::cin >> dummy;
-    XmlRpc::XmlRpcValue firmwareParams;
-    n.getParam("firmwareParams/" + cf->type() + "/", firmwareParams);
+
+    // update global and type-specific parameters
+    std::vector<std::string> paramLocations;
+    paramLocations.push_back("firmwareParams");
+    paramLocations.push_back("crazyflieTypes/" + cf->type() + "/firmwareParams");
 
     crazyflie_driver::UpdateParams::Request request;
     crazyflie_driver::UpdateParams::Response response;
 
-    // ROS_ASSERT(firmwareParams.getType() == XmlRpc::XmlRpcValue::TypeArray);
-    auto iter = firmwareParams.begin();
-    for (; iter != firmwareParams.end(); ++iter) {
-      std::string group = iter->first;
-      XmlRpc::XmlRpcValue v = iter->second;
-      auto iter2 = v.begin();
-      for (; iter2 != v.end(); ++iter2) {
-        std::string param = iter2->first;
-        XmlRpc::XmlRpcValue value = iter2->second;
-        if (value.getType() == XmlRpc::XmlRpcValue::TypeBoolean) {
-          bool b = value;
-          nGlobal.setParam(cf->frame() + "/" + group + "/" + param, b);
-        } else if (value.getType() == XmlRpc::XmlRpcValue::TypeInt) {
-          int b = value;
-          nGlobal.setParam(cf->frame() + "/" + group + "/" + param, b);
-        } else if (value.getType() == XmlRpc::XmlRpcValue::TypeDouble) {
-          double b = value;
-          nGlobal.setParam(cf->frame() + "/" + group + "/" + param, b);
-        } else {
-          ROS_WARN("No known type for %s.%s!", group.c_str(), param.c_str());
+    for (const auto& paramLocation : paramLocations) {
+      XmlRpc::XmlRpcValue firmwareParams;
+      if (paramLocation == "firmwareParams") {
+        n.getParam(paramLocation, firmwareParams);
+      } else {
+        nGlobal.getParam(paramLocation, firmwareParams);
+      }
+
+      // ROS_ASSERT(firmwareParams.getType() == XmlRpc::XmlRpcValue::TypeArray);
+      auto iter = firmwareParams.begin();
+      for (; iter != firmwareParams.end(); ++iter) {
+        std::string group = iter->first;
+        XmlRpc::XmlRpcValue v = iter->second;
+        auto iter2 = v.begin();
+        for (; iter2 != v.end(); ++iter2) {
+          std::string param = iter2->first;
+          XmlRpc::XmlRpcValue value = iter2->second;
+          if (value.getType() == XmlRpc::XmlRpcValue::TypeBoolean) {
+            bool b = value;
+            nGlobal.setParam(cf->frame() + "/" + group + "/" + param, b);
+            std::cout << "update " << group + "/" + param << " to " << b << std::endl;
+          } else if (value.getType() == XmlRpc::XmlRpcValue::TypeInt) {
+            int b = value;
+            nGlobal.setParam(cf->frame() + "/" + group + "/" + param, b);
+            std::cout << "update " << group + "/" + param << " to " << b << std::endl;
+          } else if (value.getType() == XmlRpc::XmlRpcValue::TypeDouble) {
+            double b = value;
+            nGlobal.setParam(cf->frame() + "/" + group + "/" + param, b);
+            std::cout << "update " << group + "/" + param << " to " << b << std::endl;
+          } else {
+            ROS_WARN("No known type for %s.%s!", group.c_str(), param.c_str());
+          }
+          request.params.push_back(group + "/" + param);
+          
         }
-        request.params.push_back(group + "/" + param);
-        // std::cout << "update " << group + "/" + param << " to " << (double)value << std::endl;
       }
     }
     cf->updateParams(request, response);
@@ -1696,25 +1715,25 @@ private:
     std::vector<libobjecttracker::MarkerConfiguration>& markerConfigurations)
   {
     markerConfigurations.clear();
-    ros::NodeHandle nl("~");
+    ros::NodeHandle nGlobal;
     int numConfigurations;
-    nl.getParam("numMarkerConfigurations", numConfigurations);
+    nGlobal.getParam("numMarkerConfigurations", numConfigurations);
     for (int i = 0; i < numConfigurations; ++i) {
       markerConfigurations.push_back(pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>));
       std::stringstream sstr;
       sstr << "markerConfigurations/" << i << "/numPoints";
       int numPoints;
-      nl.getParam(sstr.str(), numPoints);
+      nGlobal.getParam(sstr.str(), numPoints);
 
       std::vector<double> offset;
       std::stringstream sstr2;
       sstr2 << "markerConfigurations/" << i << "/offset";
-      nl.getParam(sstr2.str(), offset);
+      nGlobal.getParam(sstr2.str(), offset);
       for (int j = 0; j < numPoints; ++j) {
         std::stringstream sstr3;
         sstr3 << "markerConfigurations/" << i << "/points/" << j;
         std::vector<double> points;
-        nl.getParam(sstr3.str(), points);
+        nGlobal.getParam(sstr3.str(), points);
         markerConfigurations.back()->push_back(pcl::PointXYZ(points[0] + offset[0], points[1] + offset[1], points[2] + offset[2]));
       }
     }
@@ -1723,22 +1742,22 @@ private:
   void readDynamicsConfigurations(
     std::vector<libobjecttracker::DynamicsConfiguration>& dynamicsConfigurations)
   {
-    ros::NodeHandle nl("~");
+    ros::NodeHandle nGlobal;
     int numConfigurations;
-    nl.getParam("numDynamicsConfigurations", numConfigurations);
+    nGlobal.getParam("numDynamicsConfigurations", numConfigurations);
     dynamicsConfigurations.resize(numConfigurations);
     for (int i = 0; i < numConfigurations; ++i) {
       std::stringstream sstr;
       sstr << "dynamicsConfigurations/" << i;
-      nl.getParam(sstr.str() + "/maxXVelocity", dynamicsConfigurations[i].maxXVelocity);
-      nl.getParam(sstr.str() + "/maxYVelocity", dynamicsConfigurations[i].maxYVelocity);
-      nl.getParam(sstr.str() + "/maxZVelocity", dynamicsConfigurations[i].maxZVelocity);
-      nl.getParam(sstr.str() + "/maxPitchRate", dynamicsConfigurations[i].maxPitchRate);
-      nl.getParam(sstr.str() + "/maxRollRate", dynamicsConfigurations[i].maxRollRate);
-      nl.getParam(sstr.str() + "/maxYawRate", dynamicsConfigurations[i].maxYawRate);
-      nl.getParam(sstr.str() + "/maxRoll", dynamicsConfigurations[i].maxRoll);
-      nl.getParam(sstr.str() + "/maxPitch", dynamicsConfigurations[i].maxPitch);
-      nl.getParam(sstr.str() + "/maxFitnessScore", dynamicsConfigurations[i].maxFitnessScore);
+      nGlobal.getParam(sstr.str() + "/maxXVelocity", dynamicsConfigurations[i].maxXVelocity);
+      nGlobal.getParam(sstr.str() + "/maxYVelocity", dynamicsConfigurations[i].maxYVelocity);
+      nGlobal.getParam(sstr.str() + "/maxZVelocity", dynamicsConfigurations[i].maxZVelocity);
+      nGlobal.getParam(sstr.str() + "/maxPitchRate", dynamicsConfigurations[i].maxPitchRate);
+      nGlobal.getParam(sstr.str() + "/maxRollRate", dynamicsConfigurations[i].maxRollRate);
+      nGlobal.getParam(sstr.str() + "/maxYawRate", dynamicsConfigurations[i].maxYawRate);
+      nGlobal.getParam(sstr.str() + "/maxRoll", dynamicsConfigurations[i].maxRoll);
+      nGlobal.getParam(sstr.str() + "/maxPitch", dynamicsConfigurations[i].maxPitch);
+      nGlobal.getParam(sstr.str() + "/maxFitnessScore", dynamicsConfigurations[i].maxFitnessScore);
     }
   }
 
