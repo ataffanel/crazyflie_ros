@@ -153,6 +153,15 @@ target_link_libraries(crazyflie_add
   ${catkin_LIBRARIES}
 )
 
+## Declare a cpp executable
+add_executable(mocap_helper
+  src/mocap_helper.cpp
+)
+
+target_link_libraries(mocap_helper
+  ${catkin_LIBRARIES}
+)
+
 #############
 ## Install ##
 #############
